@@ -46,7 +46,7 @@ inline opxy::u32 mode_count(opxy::i32 control) {
 
 struct Series {
     opxy::u32 count;
-    opxy::i32 stretch[kMaxModes];    // partial i sits at (i + 1) * stretch[i] times the note; Q26
+    opxy::i32 stretch[kMaxModes];    // partial i sits at (i + 1) * stretch[i] times the note; Q25
     opxy::i32 amplitude[kMaxModes];  // Position's weight of partial i; Q31
 };
 
@@ -57,9 +57,9 @@ inline void compute_series(opxy::i32 structure, opxy::i32 position, opxy::u32 co
     using opxy::q31::multiply;
     const i32 kShrink = 1997159792;  // 0.93: a negative stiffness fades faster
     const i32 kGrow = 2104533974;    // 0.98
-    const i32 kStretchMax = 31 << 26, kStretchMin = 1 << 22;
+    const i32 kStretchMax = 48 << 25, kStretchMin = 1 << 20;  // 48 and 1/32; a step is at most 2^26
     i32 stiffness = lookup(kStiffness, structure);  // Q27
-    i32 stretch = 1 << 26;
+    i32 stretch = 1 << 25;
     // amplitude_i = 0.5 + 0.5 cos(2 pi p i), by the cosine recurrence in Q29.
     const i32 cos_theta = cosine(position < 0 ? 0u : static_cast<opxy::u32>(position) >> 1);
     i32 before = cos_theta >> 2;  // cos(-theta)
@@ -73,7 +73,7 @@ inline void compute_series(opxy::i32 structure, opxy::i32 position, opxy::u32 co
         const i32 next = (multiply(cos_theta, c) * 2) - before;
         before = c;
         c = next;
-        stretch += stiffness >> 1;
+        stretch += stiffness >> 2;
         if (stretch > kStretchMax) stretch = kStretchMax;
         if (stretch < kStretchMin) stretch = kStretchMin;
         stiffness = multiply(stiffness, stiffness < 0 ? kShrink : kGrow);

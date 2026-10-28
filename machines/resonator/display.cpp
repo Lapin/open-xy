@@ -60,7 +60,7 @@ inline void display(DisplayState& state, const opxy::draw::Input& input, Frame& 
         }
         for (opxy::u32 i = 0; i < series.count; ++i) {
             // (i + 1) * stretch in octaves above the note: -1 .. 7 across 24 .. 472 px.
-            const opxy::i32 octaves = log2_q10(static_cast<opxy::u32>(series.stretch[i]) * (i + 1)) - (26 << 10);
+            const opxy::i32 octaves = log2_q10(static_cast<opxy::u32>(series.stretch[i]) * (i + 1)) - (25 << 10);
             const opxy::i32 x_px = 24 + ((octaves + 1024) * 56 >> 10);
             if (x_px < 1 || x_px >= 479) continue;
             const opxy::u32 p = x_px < 240 ? 0 : 1;

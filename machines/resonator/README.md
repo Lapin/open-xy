@@ -39,6 +39,12 @@ and, as in Rings, not counted. The strike is Rings' pulse through a Q 1.5
 low-pass placed by Bright, injected as filter state so its gain never needs a
 large intermediate. Rings' 1.4-in, 0.8-out peak limiter follows the sum.
 
+A mode that has rung down below -120 dB is skipped until the next strike, so
+a note costs less as it fades. Against a transcription of Rings' float
+`ComputeFilters` over a grid of controls and notes, the port's partials sit
+within 0.34 cents and their decay rates within 0.45 percent, with the same
+partials counted in and out of the band.
+
 The two-page header and the spikes are drawn by `display.cpp` from
 `series.h`, which both the sound and the screen use to lay out the partials.
 `tools/gen_tables.py` generates `tables.h` (sine, Rings' stiffness and

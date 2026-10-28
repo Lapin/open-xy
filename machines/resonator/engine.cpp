@@ -22,18 +22,21 @@ const i32 kExciterR = 1431655765;       // 1/Q of the strike filter, Q 1.5
 const i32 kFifth = 429496730;           // 0.2
 const i32 kTenth = 214748365;           // 0.1
 const i32 kPoint85 = 1825361101;        // 0.85
-const i32 kPoint15 = 322122547;         // 0.15
 const i32 kPoint4 = 858993459;          // 0.4: the limiter's 1.4 pre-gain
 const i32 kRelease = 2748779;           // the limiter's 0.00002 per sample, over a block
 const i32 kOutput = 1202590843;         // 0.56: Rings' 1.4 x 0.8, halved for the final shift
-const i32 kFrequencyLimit = 0.49 * (1 << 23);  // 0.49 cycles per sample, Q23
+const i32 kFrequencyLimit = 2055208;    // 0.49 cycles per sample, Q22: the band's top, as in Rings
 const i32 kCutoffLimit = 515396075;     // 0.24 cycles per sample, Q31: the strike filter's reach
 const i32 kHeavy = 1 << 17;             // a loss per sample from 2^-14: applied every sample
+const i32 kIdle = 1 << 4;               // a mode state below this, 2^-20 of unity, is silent
 // 2^(-steps/2): a noise burst of 2^steps samples keeps the pulse's energy.
 const i32 kBurstGain[9] = {2147483647, 1518500250, 1073741824, 759250125, 536870912,
                            379625062, 268435456, 189812531, 134217728};
 
 inline i32 clamp(i32 value, i32 low, i32 high) { return value < low ? low : value > high ? high : value; }
+
+// x (2 - x) for a control, as 1 - (1 - x)^2 so a full control cannot overflow.
+inline i32 bend(i32 x) { const i32 rest = kOne - x; return kOne - multiply(rest, rest); }
 
 // value * 2^n, saturating.
 inline i32 shift(i32 value, int n) {
@@ -108,8 +111,8 @@ void tune(Voice& voice, i32 structure, i32 brightness, i32 damping, i32 position
     attenuation = multiply(attenuation, attenuation);
     attenuation = multiply(attenuation, attenuation);
     const i32 bright = multiply(squared, kOne - multiply(attenuation, kFifth));
-    i32 q_loss = multiply(bright + (bright - multiply(bright, bright)), kPoint85) + kPoint15;
-    const i32 q_loss_rate = multiply(structure + (structure - multiply(structure, structure)), kTenth);
+    i32 q_loss = kOne - multiply(kOne - bend(bright), kPoint85);  // 0.15 + 0.85 bright (2 - bright)
+    const i32 q_loss_rate = multiply(bend(structure), kTenth);
     i32 harmonic = 0;  // Q28
     voice.count = 0;
     for (u32 i = 0; i < kMaxModes; ++i) {
@@ -120,13 +123,13 @@ void tune(Voice& voice, i32 structure, i32 brightness, i32 damping, i32 position
             continue;
         }
         harmonic += f0;
-        const i32 partial = multiply(harmonic, series.stretch[i]);  // Q23
+        const i32 partial = multiply(harmonic, series.stretch[i]);  // Q22
         if (partial >= kFrequencyLimit) {
             // Above the band: silent, and like Rings not counted, but the chain goes on.
             if (mode.active) mode.x = mode.y = 0;
             mode.active = 0;
         } else {
-            const i32 f = partial << 8;  // Q31
+            const i32 f = partial << 9;  // Q31
             mode.rotation = sine_quarter(f << 1);
             mode.drive = f + multiply(f, kHalfPiLessOne);           // (pi/2) f, also pi f in Q30
             const u32 q = 256u + static_cast<u32>(multiply(f, quality));  // 1 + f q, Q8
@@ -143,8 +146,8 @@ void tune(Voice& voice, i32 structure, i32 brightness, i32 damping, i32 position
             mode.active = 1;
             voice.count = i + 1;
         }
-        quality = multiply(quality, q_loss);
         q_loss += multiply(q_loss_rate, kOne - q_loss);
+        quality = multiply(quality, q_loss);
     }
 }
 
@@ -152,7 +155,7 @@ void tune(Voice& voice, i32 structure, i32 brightness, i32 damping, i32 position
 // sixteenth of the note to sixteen times it, at Q 1.5.
 void strike(Voice& voice, i32 brightness, u32 pitch, i32 strike_control) {
     Exciter& e = voice.exciter;
-    const i32 colour = brightness + (brightness - multiply(brightness, brightness));  // b (2 - b)
+    const i32 colour = bend(brightness);  // b (2 - b)
     const i32 f0 = static_cast<i32>(pitch >> 1);                                      // Q31
     i32 cutoff = exp2_scale(f0, colour - (1 << 30));                                  // f0 2^((c - 0.5) 8)
     if (cutoff > kCutoffLimit) cutoff = kCutoffLimit;
@@ -247,10 +250,13 @@ inline void render(Voice& voice, Shared&, opxy::u32, opxy::Output output,
     for (unsigned i = 0; i < opxy::block_frames; ++i) sum[i] = 0;
     const bool excited = voice.exciter.active != 0;
     if (excited) excite(voice, input);
+    else for (unsigned i = 0; i < opxy::block_frames; ++i) input[i] = 0;
     for (u32 m = 0; m < voice.count; ++m) {
         Mode& mode = voice.modes[m];
         if (!mode.active) continue;
         i32 x = mode.x, y = mode.y;
+        // A mode that has rung down below -120 dB costs nothing until the next strike.
+        if (!excited && x < kIdle && x > -kIdle && y < kIdle && y > -kIdle) continue;
         const i32 k = mode.rotation, a = mode.amplitude, b = mode.drive;
         if (mode.heavy) {
             const i32 keep = mode.decay;
