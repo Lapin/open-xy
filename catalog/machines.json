@@ -372,6 +372,24 @@
         "runs": 3,
         "block_percent": 4.910353
       }
+    },
+    {
+      "id": "mi_rings",
+      "kind": "synth",
+      "maintainer": "Lapin",
+      "status": "published",
+      "repository": "https://github.com/Lapin/open-xy-mi-rings",
+      "tag": "v1.0.0",
+      "commit": "4d671135d78c079bf501139c4fb2a053264c8a5c",
+      "path": ".",
+      "cpu": {
+        "benchmark": "opxy-synth-c8-v1",
+        "commit": "4d671135d78c079bf501139c4fb2a053264c8a5c",
+        "firmware_sha256": "24ec09e4d4fd3c2b1d28380e2cab5a9e82133b16722d89a2b15f96a7adc613e7",
+        "runs": 3,
+        "block_percent": 1.406882,
+        "report": "https://github.com/Lapin/open-xy-mi-rings/issues/1"
+      }
     }
   ]
 }
